@@ -33,7 +33,24 @@ export const createQRBill = async (frm) => {
   const amount = frm.doc.outstanding_amount;
   // Use custom reference_number_full field for SCOR reference (ISO 11649)
   // Falls back to empty string if not set (NON reference type)
-  const reference = frm.doc.reference_number_full || "";
+  // Reference must be: empty (NON), exactly 27 digits (QRR), or start with RF (SCOR)
+  let reference = frm.doc.reference_number_full || "";
+
+  // Remove spaces from reference for validation
+  const cleanRef = reference.replace(/\s/g, "");
+
+  // Validate reference format
+  if (cleanRef !== "") {
+    const isQRReference = /^\d{27}$/.test(cleanRef);
+    const isSCORReference = /^RF\d{2}[A-Z0-9]{1,21}$/i.test(cleanRef);
+
+    if (!isQRReference && !isSCORReference) {
+      showError(`Invalid reference format: "${reference}". Must be either empty, a 27-digit QR reference, or an RF creditor reference (e.g., RF18...).`);
+      return;
+    }
+    // Use cleaned reference without spaces
+    reference = cleanRef;
+  }
   const company = frm.doc.company;
   const language = getLanguageCode(frm.doc.language);
   const bank = await getDocument("Swiss QR Bill Settings", company);
