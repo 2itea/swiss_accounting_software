@@ -36,8 +36,8 @@ export const generateQRPDF = (paymentinfo, docname, frm, language) => {
 
     });
 
-    // Attach the Swiss QR bill
-    const qrBill = new SwissQRBill(paymentinfo);
+    // Attach the Swiss QR bill with language option
+    const qrBill = new SwissQRBill(paymentinfo, { language });
     qrBill.attachTo(pdf);
 
     showProgress(60, "generating pdf...");

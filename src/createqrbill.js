@@ -44,7 +44,9 @@ export const createQRBill = async (frm) => {
     customer = frm.doc.customer_name
   }
 
-  const amount = frm.doc.outstanding_amount;
+  // Use outstanding_amount if available (for submitted invoices), otherwise use grand_total
+  // outstanding_amount may be 0 before submission or if fully paid
+  const amount = frm.doc.outstanding_amount > 0 ? frm.doc.outstanding_amount : frm.doc.grand_total;
   const company = frm.doc.company;
   const language = getLanguageCode(frm.doc.language);
   const bank = await getDocument("Swiss QR Bill Settings", company);
