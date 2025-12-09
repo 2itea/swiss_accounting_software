@@ -15,7 +15,6 @@ import {
   getCurrency,
   getDocument,
   getLanguageCode,
-  getReferenceCode,
   showError,
   showProgress,
 } from "./utils";
@@ -32,7 +31,9 @@ export const createQRBill = async (frm) => {
   }
 
   const amount = frm.doc.outstanding_amount;
-  const reference = getReferenceCode(frm.doc.name);
+  // Use custom reference_number_full field for SCOR reference (ISO 11649)
+  // Falls back to empty string if not set (NON reference type)
+  const reference = frm.doc.reference_number_full || "";
   const company = frm.doc.company;
   const language = getLanguageCode(frm.doc.language);
   const bank = await getDocument("Swiss QR Bill Settings", company);
