@@ -15,9 +15,23 @@ import {
   getCurrency,
   getDocument,
   getLanguageCode,
+  getReferenceCode,
   showError,
   showProgress,
 } from "./utils";
+
+/**
+ * Checks if the IBAN is a QR-IBAN (IID between 30000-31999)
+ * QR-IBAN requires QRR reference (27 digits)
+ * Regular IBAN accepts SCOR (RF...) or NON (empty) reference
+ * @param {String} iban IBAN to check
+ * @returns {Boolean} True if QR-IBAN
+ */
+const isQRIBAN = (iban) => {
+  const cleanIban = iban.replace(/\s/g, "");
+  const iid = parseInt(cleanIban.substring(4, 9), 10);
+  return iid >= 30000 && iid <= 31999;
+};
 
 export const createQRBill = async (frm) => {
   showProgress(10, "getting data...");
@@ -31,26 +45,6 @@ export const createQRBill = async (frm) => {
   }
 
   const amount = frm.doc.outstanding_amount;
-  // Use custom reference_number_full field for SCOR reference (ISO 11649)
-  // Falls back to empty string if not set (NON reference type)
-  // Reference must be: empty (NON), exactly 27 digits (QRR), or start with RF (SCOR)
-  let reference = frm.doc.reference_number_full || "";
-
-  // Remove spaces from reference for validation
-  const cleanRef = reference.replace(/\s/g, "");
-
-  // Validate reference format
-  if (cleanRef !== "") {
-    const isQRReference = /^\d{27}$/.test(cleanRef);
-    const isSCORReference = /^RF\d{2}[A-Z0-9]{1,21}$/i.test(cleanRef);
-
-    if (!isQRReference && !isSCORReference) {
-      showError(`Invalid reference format: "${reference}". Must be either empty, a 27-digit QR reference, or an RF creditor reference (e.g., RF18...).`);
-      return;
-    }
-    // Use cleaned reference without spaces
-    reference = cleanRef;
-  }
   const company = frm.doc.company;
   const language = getLanguageCode(frm.doc.language);
   const bank = await getDocument("Swiss QR Bill Settings", company);
@@ -64,6 +58,36 @@ export const createQRBill = async (frm) => {
     frm.doc.customer_address
   );
   const { iban } = await getDocument("Bank Account", bankAccount);
+
+  // Determine reference based on IBAN type
+  // QR-IBAN (IID 30000-31999) requires QRR reference (27 digits)
+  // Regular IBAN accepts SCOR (RF...) or NON (empty) reference
+  let reference = "";
+  const userReference = frm.doc.reference_number_full || "";
+  const cleanUserRef = userReference.replace(/\s/g, "");
+
+  if (isQRIBAN(iban)) {
+    // QR-IBAN: Must use QRR reference (27 digits)
+    // If user provided a 27-digit reference, use it; otherwise generate one
+    if (/^\d{27}$/.test(cleanUserRef)) {
+      reference = cleanUserRef;
+    } else {
+      // Auto-generate QRR reference from document name
+      reference = getReferenceCode(frm.docname);
+      console.log(`QR-IBAN detected: Auto-generated QRR reference ${reference}`);
+    }
+  } else {
+    // Regular IBAN: Use SCOR (RF...) reference or NON (empty)
+    if (cleanUserRef !== "") {
+      const isSCORReference = /^RF\d{2}[A-Z0-9]{1,21}$/i.test(cleanUserRef);
+      if (!isSCORReference) {
+        showError(`Invalid SCOR reference format: "${userReference}". For regular IBAN, reference must be empty or start with RF (e.g., RF18...).`);
+        return;
+      }
+      reference = cleanUserRef;
+    }
+    // If empty, NON reference type is used (no reference)
+  }
 
   showProgress(40, "generating pdf...");
 
