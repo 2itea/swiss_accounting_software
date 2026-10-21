@@ -32,7 +32,7 @@ def get_qr_code_type(company: str | None) -> str:
 
 
 QRR_BODY_LENGTH = 26
-SCOR_PAYLOAD_LENGTH = 21
+SCOR_PAYLOAD_LENGTH = 12
 
 
 def invoice_number_part(docname: str, length: int) -> str:
