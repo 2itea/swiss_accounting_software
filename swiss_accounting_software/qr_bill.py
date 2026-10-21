@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 import re
+import secrets
 
 import frappe
 from frappe import _
@@ -58,9 +59,13 @@ def iso11649_check_digits(payload: str) -> str:
 	return f"{98 - (int(numeric) % 97):02d}"
 
 
-def get_scor_reference(docname: str) -> str:
-	payload = invoice_number_part(docname, SCOR_PAYLOAD_LENGTH)
-	return f"RF{iso11649_check_digits(payload)}{payload}"
+def get_scor_reference() -> str:
+	# Random, so it only stays the same once stored in esr_reference_code (attach_pdf.set_payment_reference).
+	while True:
+		payload = str(secrets.randbelow(9 * 10 ** (SCOR_PAYLOAD_LENGTH - 1)) + 10 ** (SCOR_PAYLOAD_LENGTH - 1))
+		reference = f"RF{iso11649_check_digits(payload)}{payload}"
+		if not frappe.db.exists("Sales Invoice", {"esr_reference_code": reference}):
+			return reference
 
 
 def get_payment_reference(invoice, reference_type: str | None = None) -> str | None:
@@ -73,7 +78,7 @@ def get_payment_reference(invoice, reference_type: str | None = None) -> str | N
 	if reference_type == "SCOR":
 		if existing.upper().startswith("RF") and 5 <= len(existing) <= 25:
 			return existing.upper()
-		return get_scor_reference(invoice.name)
+		return get_scor_reference()
 
 	if existing.isdigit() and len(existing) == 27:
 		return existing

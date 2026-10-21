@@ -56,9 +56,23 @@ def remove_existing_qr_pdf(doctype, docname):
 
 
 def sales_invoice_before_submit(doc, method=None):
+	set_payment_reference(doc)
+
+
+def set_payment_reference(doc):
 	from swiss_accounting_software.qr_bill import get_payment_reference
 
-	doc.esr_reference_code = get_payment_reference(doc)
+	reference = get_payment_reference(doc)
+	values = {"esr_reference_code": reference}
+	if reference and reference.startswith("RF"):
+		values["reference_number_full"] = reference
+		values["reference_number"] = " ".join(reference[i : i + 4] for i in range(0, len(reference), 4))
+
+	values = {field: value for field, value in values.items() if doc.meta.has_field(field)}
+	if doc.docstatus == 1:
+		doc.db_set(values)
+	else:
+		doc.update(values)
 
 
 def sales_invoice_on_submit(doc, method=None):
@@ -78,6 +92,10 @@ def attach_qr_bill(docname, ignore_permissions=False):
 	invoice = frappe.get_doc(doctype, docname)
 	if not ignore_permissions:
 		invoice.check_permission("read")
+
+	# Store the reference before printing it, so the QR and bank matching use the same one.
+	if not invoice.esr_reference_code:
+		set_payment_reference(invoice)
 
 	qr_pdfs = generate_qr_slip_pdfs(invoice)
 	invoice_pdf = get_pdf_data(doctype, docname)
